@@ -10,6 +10,8 @@ export const PERMISOS = {
   verCatalogo: ["ADMIN", "CAJA", "ODONTOLOGO"],
   /** Registrar y editar atenciones y pagos */
   registrarAtenciones: ["ADMIN", "CAJA"],
+  /** Eliminar atenciones */
+  eliminarAtenciones: ["ADMIN"],
   /** Ver atenciones (el odontólogo solo las suyas) */
   verAtenciones: ["ADMIN", "CAJA", "ODONTOLOGO"],
   verDashboard: ["ADMIN", "CAJA", "ODONTOLOGO"],
