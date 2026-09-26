@@ -252,7 +252,9 @@ Hay 50 pruebas que cubren:
 
 ## Pasar a producción y a PostgreSQL
 
-**Producción:**
+**Publicar en internet (recomendado):** siga la guía paso a paso **[DESPLIEGUE.md](DESPLIEGUE.md)** para Railway. El `Dockerfile` también sirve para Render, Fly.io o un VPS.
+
+**Producción manual:**
 
 1. Defina `AUTH_SECRET` con una clave larga y aleatoria. Si cambia la clave, todas las sesiones se cierran.
 2. Ejecute `npm run build`, luego `npx prisma migrate deploy` y finalmente `npm start`.
