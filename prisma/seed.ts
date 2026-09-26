@@ -51,6 +51,8 @@ async function limpiar() {
   await prisma.usuario.deleteMany();
   await prisma.odontologo.deleteMany();
   await prisma.configuracion.deleteMany();
+  // Reinicia los autoincrementales (solo SQLite) para que los IDs empiecen en 1
+  await prisma.$executeRawUnsafe("DELETE FROM sqlite_sequence").catch(() => {});
 }
 
 async function main() {
