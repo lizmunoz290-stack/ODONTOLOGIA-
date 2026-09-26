@@ -1,0 +1,247 @@
+// Esquema de la base de datos de la clínica dental.
+// Para migrar a PostgreSQL: cambiar provider a "postgresql" y DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  ADMIN
+  CAJA
+  ODONTOLOGO
+}
+
+enum Categoria {
+  PREVENTIVA
+  RESTAURADORA
+  ENDODONCIA
+  CIRUGIA
+  ORTODONCIA
+  ESTETICA
+  PROTESIS
+  IMPLANTOLOGIA
+}
+
+enum RolManoObra {
+  ODONTOLOGO
+  ASISTENTE
+}
+
+enum TipoTercerizado {
+  LABORATORIO
+  RADIOGRAFIA_EXTERNA
+}
+
+enum CategoriaGasto {
+  ALQUILER
+  LUZ
+  AGUA
+  INTERNET_TELEFONO
+  SUELDOS_ADMINISTRATIVOS
+  MARKETING
+  SOFTWARE
+  CONTABILIDAD
+  LIMPIEZA
+  MANTENIMIENTO
+  SEGUROS
+  LICENCIAS
+  OTROS
+}
+
+enum MetodoProrrateo {
+  MINUTOS
+  ATENCIONES
+  INGRESOS
+}
+
+enum Turno {
+  MANANA
+  TARDE
+}
+
+enum MetodoPago {
+  EFECTIVO
+  TARJETA
+  YAPE_PLIN
+  TRANSFERENCIA
+}
+
+enum EstadoPago {
+  PAGADO
+  PENDIENTE
+  PARCIAL
+}
+
+enum Canal {
+  TELEMARKETING
+  REDES_SOCIALES
+  REFERIDO
+  PASANTE
+  OTRO
+}
+
+/// Configuración general (una sola fila, id = 1)
+model Configuracion {
+  id              Int             @id @default(1)
+  nombreClinica   String          @default("Clínica Dental")
+  ruc             String?
+  direccion       String?
+  metodoProrrateo MetodoProrrateo @default(MINUTOS)
+  igvPorcentaje   Float           @default(0.18)
+  margenMinimo    Float           @default(0.20)
+  updatedAt       DateTime        @updatedAt
+}
+
+model Usuario {
+  id           Int         @id @default(autoincrement())
+  nombre       String
+  email        String      @unique
+  passwordHash String
+  rol          Rol
+  activo       Boolean     @default(true)
+  odontologoId Int?        @unique
+  odontologo   Odontologo? @relation(fields: [odontologoId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Odontologo {
+  id           Int        @id @default(autoincrement())
+  nombre       String
+  especialidad String
+  cop          String? /// N.º de colegiatura (Colegio Odontológico del Perú)
+  activo       Boolean    @default(true)
+  usuario      Usuario?
+  atenciones   Atencion[]
+  createdAt    DateTime   @default(now())
+}
+
+model Servicio {
+  id                  Int                @id @default(autoincrement())
+  nombre              String             @unique
+  categoria           Categoria
+  precio              Float /// Precio de venta de lista (S/)
+  duracionMin         Int /// Duración estimada por sesión (min)
+  sesiones            Int                @default(1)
+  costoEsterilizacion Float              @default(0) /// Esterilización e instrumental por atención
+  activo              Boolean            @default(true)
+  materiales          FichaMaterial[]
+  manoObra            FichaManoObra[]
+  equipos             FichaEquipo[]
+  tercerizados        FichaTercerizado[]
+  atenciones          Atencion[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model Material {
+  id            Int             @id @default(autoincrement())
+  nombre        String          @unique
+  unidad        String
+  costoUnitario Float
+  activo        Boolean         @default(true)
+  fichas        FichaMaterial[]
+}
+
+model Equipo {
+  id               Int           @id @default(autoincrement())
+  nombre           String        @unique
+  costoAdquisicion Float
+  vidaUtilHoras    Float
+  activo           Boolean       @default(true)
+  fichas           FichaEquipo[]
+}
+
+model FichaMaterial {
+  id         Int      @id @default(autoincrement())
+  servicioId Int
+  servicio   Servicio @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  materialId Int
+  material   Material @relation(fields: [materialId], references: [id])
+  cantidad   Float
+
+  @@unique([servicioId, materialId])
+}
+
+model FichaManoObra {
+  id         Int         @id @default(autoincrement())
+  servicioId Int
+  servicio   Servicio    @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  rol        RolManoObra
+  minutos    Int
+  costoHora  Float
+}
+
+model FichaEquipo {
+  id         Int      @id @default(autoincrement())
+  servicioId Int
+  servicio   Servicio @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  equipoId   Int
+  equipo     Equipo   @relation(fields: [equipoId], references: [id])
+  minutosUso Int
+
+  @@unique([servicioId, equipoId])
+}
+
+model FichaTercerizado {
+  id          Int             @id @default(autoincrement())
+  servicioId  Int
+  servicio    Servicio        @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  tipo        TipoTercerizado
+  descripcion String
+  costo       Float
+}
+
+model GastoIndirecto {
+  id          Int            @id @default(autoincrement())
+  periodo     String /// Formato AAAA-MM
+  categoria   CategoriaGasto
+  descripcion String
+  monto       Float
+  createdAt   DateTime       @default(now())
+
+  @@index([periodo])
+}
+
+model Paciente {
+  id         Int        @id @default(autoincrement())
+  nombre     String
+  dni        String?    @unique
+  atenciones Atencion[]
+  createdAt  DateTime   @default(now())
+}
+
+model Atencion {
+  id                   Int        @id @default(autoincrement())
+  fecha                DateTime
+  pacienteId           Int
+  paciente             Paciente   @relation(fields: [pacienteId], references: [id])
+  servicioId           Int
+  servicio             Servicio   @relation(fields: [servicioId], references: [id])
+  odontologoId         Int
+  odontologo           Odontologo @relation(fields: [odontologoId], references: [id])
+  turno                Turno
+  precioLista          Float
+  descuento            Float      @default(0)
+  precioCobrado        Float
+  incluyeIgv           Boolean    @default(true)
+  ingresoNeto          Float /// Precio cobrado sin IGV (base para rentabilidad)
+  metodoPago           MetodoPago
+  estadoPago           EstadoPago
+  montoPagado          Float
+  canal                Canal
+  costoDirectoSnapshot Float /// Costo directo según ficha técnica al momento del registro
+  minutosSnapshot      Int /// Minutos de sillón (duración × sesiones) al momento del registro
+  observaciones        String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  @@index([fecha])
+  @@index([servicioId])
+  @@index([odontologoId])
+}
