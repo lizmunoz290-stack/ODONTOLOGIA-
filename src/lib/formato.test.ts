@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatFecha, formatPorcentaje, formatSoles, parseFechaPeru, periodoDe, periodosEntre, redondear } from "./formato";
+import { NBSP, formatFecha, formatPorcentaje, formatSoles, parseFechaPeru, periodoDe, periodosEntre, redondear } from "./formato";
 
 describe("formato", () => {
   it("soles", () => {
-    expect(formatSoles(1234.5)).toBe("S/ 1,234.50");
-    expect(formatSoles(-12)).toBe("-S/ 12.00");
-    expect(formatSoles(0.005)).toBe("S/ 0.01");
+    expect(formatSoles(1234.5)).toBe(`S/${NBSP}1,234.50`);
+    expect(formatSoles(-12)).toBe(`-S/${NBSP}12.00`);
+    expect(formatSoles(0.005)).toBe(`S/${NBSP}0.01`);
   });
   it("redondeo", () => {
     expect(redondear(1.005)).toBe(1.01);

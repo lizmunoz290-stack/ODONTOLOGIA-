@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { calcularTasa, construirBasesMensuales, explicarAsignacion, indirectoAtencion } from "../indirecto";
 
+/** Los montos usan espacio no separable; se normaliza para comparar */
+const txt = (s: string) => s.replace(/\u00a0/g, " ");
+
 const mes = { periodo: "2026-04", totalIndirectos: 10000, totalMinutos: 5000, totalAtenciones: 200, totalIngresos: 50000 };
 
 describe("prorrateo de indirectos", () => {
@@ -8,8 +11,8 @@ describe("prorrateo de indirectos", () => {
     const t = calcularTasa("MINUTOS", mes);
     expect(t.tasa).toBe(2);
     expect(indirectoAtencion(t, { minutos: 45, ingresoNeto: 100 })).toBe(90);
-    expect(t.formula).toBe("S/ 10,000.00 ÷ 5,000 min = S/ 2.0000 por minuto");
-    expect(explicarAsignacion(t, { minutos: 45, ingresoNeto: 100 })).toBe("S/ 2.0000/min × 45 min = S/ 90.00");
+    expect(txt(t.formula)).toBe("S/ 10,000.00 ÷ 5,000 min = S/ 2.0000 por minuto");
+    expect(txt(explicarAsignacion(t, { minutos: 45, ingresoNeto: 100 }))).toBe("S/ 2.0000/min × 45 min = S/ 90.00");
   });
 
   it("por número de atenciones", () => {

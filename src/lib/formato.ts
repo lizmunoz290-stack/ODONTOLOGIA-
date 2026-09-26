@@ -15,10 +15,13 @@ export function redondear(valor: number, decimales = 2): number {
   return Math.round((valor + Number.EPSILON) * f) / f;
 }
 
-/** 1234.5 → "S/ 1,234.50"; negativos → "-S/ 12.00" */
+/** Espacio no separable: "S/" nunca queda en una línea y el número en otra. */
+export const NBSP = "\u00a0";
+
+/** 1234.5 → "S/ 1,234.50"; negativos → "-S/ 12.00" (con espacio no separable) */
 export function formatSoles(valor: number): string {
   const v = redondear(valor);
-  const s = `S/ ${fmtSoles.format(Math.abs(v))}`;
+  const s = `S/${NBSP}${fmtSoles.format(Math.abs(v))}`;
   return v < 0 ? `-${s}` : s;
 }
 
