@@ -1,6 +1,14 @@
+"use client";
+import { useEstadoFormulario } from "./formulario-accion";
+
+/**
+ * Etiqueta + control + mensaje de error. Si se indica `nombre`, toma el error de ese campo
+ * del <FormularioAccion> que lo contiene.
+ */
 export function Campo({
   etiqueta,
   htmlFor,
+  nombre,
   error,
   ayuda,
   className,
@@ -8,12 +16,15 @@ export function Campo({
 }: {
   etiqueta: string;
   htmlFor?: string;
+  nombre?: string;
   error?: string[] | string;
   ayuda?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }) {
-  const msg = Array.isArray(error) ? error[0] : error;
+  const estado = useEstadoFormulario();
+  const err = error ?? (nombre ? estado.errores?.[nombre] : undefined);
+  const msg = Array.isArray(err) ? err[0] : err;
   return (
     <div className={className}>
       <label htmlFor={htmlFor} className="etiqueta">

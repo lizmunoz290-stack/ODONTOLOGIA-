@@ -3,3 +3,4 @@ export * from "./directo";
 export * from "./indirecto";
 export * from "./rentabilidad";
 export * from "./equilibrio";
+export * from "./agregados";

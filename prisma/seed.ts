@@ -8,6 +8,7 @@ import { PrismaClient, type Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { calcularCostoDirecto, ingresoNeto, minutosSillon } from "../src/lib/costeo";
 import { fechaISO, periodosEntre, redondear } from "../src/lib/formato";
+import { claveTexto } from "../src/lib/libro/normalizar";
 import {
   APELLIDOS, EQUIPOS, GASTOS_BASE, MATERIALES, NOMBRES, ODONTOLOGOS, SERVICIOS, type ClaveOdontologo,
 } from "./seed-data";
@@ -38,6 +39,12 @@ function elegirPonderado<T>(items: readonly T[], peso: (i: T) => number): T {
 }
 
 async function limpiar() {
+  await prisma.gasto.deleteMany();
+  await prisma.tipoGasto.deleteMany();
+  await prisma.ingreso.deleteMany();
+  await prisma.inicio.deleteMany();
+  await prisma.meta.deleteMany();
+  await prisma.permiso.deleteMany();
   await prisma.atencion.deleteMany();
   await prisma.paciente.deleteMany();
   await prisma.gastoIndirecto.deleteMany();
@@ -51,6 +58,8 @@ async function limpiar() {
   await prisma.usuario.deleteMany();
   await prisma.odontologo.deleteMany();
   await prisma.configuracion.deleteMany();
+  // Reinicia los autoincrementales (solo SQLite) para que los IDs empiecen en 1
+  await prisma.$executeRawUnsafe("DELETE FROM sqlite_sequence").catch(() => {});
 }
 
 async function main() {
@@ -238,6 +247,95 @@ async function main() {
     }
   }
   await prisma.atencion.createMany({ data: atenciones });
+
+  // ───── Libro contable de ejemplo (datos ficticios derivados de las atenciones) ─────
+  const pacientesPorId = new Map((await prisma.paciente.findMany()).map((p) => [p.id, p.nombre]));
+  const categoriaServicio = new Map(servicios.map((s) => [s.id, s.seed.categoria]));
+  const MEDIO: Record<string, string> = { EFECTIVO: "EFECTIVO", TARJETA: "TARJETA", YAPE_PLIN: "DEPOSITO", TRANSFERENCIA: "DEPOSITO" };
+  let ticket = 20000;
+  const ingresos: Prisma.IngresoCreateManyInput[] = atenciones
+    .filter((a) => (a.montoPagado as number) > 0)
+    .map((a) => {
+      const nombre = pacientesPorId.get(a.pacienteId as number)!;
+      ticket++;
+      return {
+        fecha: a.fecha as Date, ticket, paciente: nombre, pacienteClave: claveTexto(nombre), monto: a.montoPagado as number,
+        medioPago: MEDIO[a.metodoPago as string], especialidad: categoriaServicio.get(a.servicioId as number) === "ORTODONCIA" ? "ORTODONCIA" : "ODONTOLOGIA",
+        origen: "Datos de ejemplo", huella: `ejemplo-i-${ticket}`,
+      };
+    });
+  await prisma.ingreso.createMany({ data: ingresos });
+
+  const tiposLibro: [string, "DIRECTO_ORTODONCIA" | "DIRECTO_ODONTOLOGIA" | "DIRECTO_COMPARTIDO" | "INDIRECTO" | "NO_OPERATIVO"][] = [
+    ["ORTODONCISTA", "DIRECTO_ORTODONCIA"], ["LABORATORIO ORTODONCIA", "DIRECTO_ORTODONCIA"], ["ODONTOLOGO", "DIRECTO_ODONTOLOGIA"],
+    ["CIRUJANO", "DIRECTO_ODONTOLOGIA"], ["LABORATORIO ODONTOLOGIA", "DIRECTO_ODONTOLOGIA"], ["MATERIALES", "DIRECTO_COMPARTIDO"],
+    ["RAYDENT", "DIRECTO_COMPARTIDO"], ["SUELDO", "INDIRECTO"], ["ALQUILER", "INDIRECTO"], ["LUZ", "INDIRECTO"], ["AGUA", "INDIRECTO"],
+    ["TELEFONIA E INTERNET", "INDIRECTO"], ["PUBLICIDAD", "INDIRECTO"], ["IMPUESTOS", "INDIRECTO"], ["LIMPIEZA", "INDIRECTO"],
+    ["OTROS", "INDIRECTO"], ["RETIRO DE UTILIDAD", "NO_OPERATIVO"],
+  ];
+  const idTipo = new Map<string, number>();
+  for (const [nombre, destino] of tiposLibro) idTipo.set(nombre, (await prisma.tipoGasto.create({ data: { nombre, destino } })).id);
+  const TIPO_DE_CATEGORIA: Record<string, string> = {
+    ALQUILER: "ALQUILER", LUZ: "LUZ", AGUA: "AGUA", INTERNET_TELEFONO: "TELEFONIA E INTERNET", SUELDOS_ADMINISTRATIVOS: "SUELDO",
+    MARKETING: "PUBLICIDAD", LIMPIEZA: "LIMPIEZA", CONTABILIDAD: "OTROS", SOFTWARE: "OTROS", MANTENIMIENTO: "OTROS", SEGUROS: "OTROS", LICENCIAS: "IMPUESTOS", OTROS: "OTROS",
+  };
+  const gastosLibro: Prisma.GastoCreateManyInput[] = [];
+  let nGasto = 0;
+  const agregarGasto = (fecha: Date, descripcion: string, monto: number, tipo: string) =>
+    gastosLibro.push({
+      fecha, descripcion, monto: redondear(monto), tipoGastoId: idTipo.get(tipo)!, tipoOriginal: tipo, medioPago: rnd() < 0.5 ? "EFECTIVO" : "DEPOSITO",
+      comprobante: "RECIBO", numero: String(4000 + ++nGasto), origen: "Datos de ejemplo", huella: `ejemplo-g-${nGasto}`,
+    });
+  for (const g of gastos) agregarGasto(new Date(`${g.periodo}-05T12:00:00-05:00`), g.descripcion as string, g.monto as number, TIPO_DE_CATEGORIA[g.categoria as string]);
+  for (const periodo of periodos) {
+    const delMes = ingresos.filter((i) => fechaISO(i.fecha as Date).startsWith(periodo));
+    const orto = delMes.filter((i) => i.especialidad === "ORTODONCIA").reduce((s, i) => s + (i.monto as number), 0);
+    const odo = delMes.filter((i) => i.especialidad === "ODONTOLOGIA").reduce((s, i) => s + (i.monto as number), 0);
+    for (let q = 0; q < 4; q++) {
+      const f = new Date(`${periodo}-${String(7 + q * 7).padStart(2, "0")}T12:00:00-05:00`);
+      agregarGasto(f, "TURNOS ORTODONCISTA SEMANA", (orto * 0.22) / 4, "ORTODONCISTA");
+      agregarGasto(f, "TURNOS ODONTOLOGO SEMANA", (odo * 0.18) / 4, "ODONTOLOGO");
+      agregarGasto(f, "COMPRA DE MATERIALES", ((orto + odo) * 0.07) / 4, "MATERIALES");
+      agregarGasto(f, "RAX PACIENTES", ((orto + odo) * 0.02) / 4, "RAYDENT");
+    }
+    agregarGasto(new Date(`${periodo}-20T12:00:00-05:00`), "LABORATORIO BRACKETS Y CONTENCIONES", orto * 0.04, "LABORATORIO ORTODONCIA");
+    agregarGasto(new Date(`${periodo}-20T12:00:00-05:00`), "LABORATORIO CORONAS", odo * 0.05, "LABORATORIO ODONTOLOGIA");
+    agregarGasto(new Date(`${periodo}-22T12:00:00-05:00`), "HONORARIOS CIRUJANO", odo * 0.04, "CIRUJANO");
+    agregarGasto(new Date(`${periodo}-28T12:00:00-05:00`), "RETIRO DE UTILIDAD SOCIOS", 3000, "RETIRO DE UTILIDAD");
+  }
+  await prisma.gasto.createMany({ data: gastosLibro });
+
+  // Inicios: primera atención de cada paciente, con una asesora
+  const vistos = new Set<number>();
+  const iniciosLibro: Prisma.InicioCreateManyInput[] = [];
+  for (const a of atenciones) {
+    const pid = a.pacienteId as number;
+    if (vistos.has(pid) || a.canal === "PASANTE") continue;
+    vistos.add(pid);
+    const nombre = pacientesPorId.get(pid)!;
+    iniciosLibro.push({ fecha: a.fecha as Date, paciente: nombre, pacienteClave: claveTexto(nombre), asesora: elegir(["KARLA", "DIANA", "ELISA"]), cantidad: 1, origen: "Datos de ejemplo", huella: `ejemplo-n-${pid}` });
+  }
+  await prisma.inicio.createMany({ data: iniciosLibro });
+  await prisma.meta.createMany({
+    data: periodos.flatMap((periodo, i) => [
+      { periodo, indicador: "ORTODONCIA" as const, valor: 9000 + i * 200 },
+      { periodo, indicador: "ODONTOLOGIA" as const, valor: 62000 + i * 800 },
+      { periodo, indicador: "INICIOS" as const, valor: 90 },
+      { periodo, indicador: "UTILIDAD" as const, valor: 15000 },
+    ]),
+  });
+  const enDias = (d: number) => new Date(Date.now() + d * 86_400_000);
+  await prisma.permiso.createMany({
+    data: [
+      { detalle: "Licencia municipal de funcionamiento", vencimiento: null, notas: "Indeterminado" },
+      { detalle: "Certificado de Defensa Civil (ITSE)", vencimiento: enDias(220) },
+      { detalle: "Autorización sanitaria (MINSA / DIRIS)", vencimiento: enDias(35) },
+      { detalle: "Recarga de extintores", vencimiento: enDias(150) },
+      { detalle: "Saneamiento ambiental (fumigación)", vencimiento: enDias(-20) },
+      { detalle: "Pozo a tierra", vencimiento: enDias(300) },
+    ],
+  });
+  console.log(`✔ Libro contable de ejemplo: ${ingresos.length} ingresos, ${gastosLibro.length} gastos, ${iniciosLibro.length} inicios`);
 
   console.log(`✔ ${MATERIALES.length} materiales, ${EQUIPOS.length} equipos, ${SERVICIOS.length} servicios con ficha técnica`);
   console.log(`✔ ${ODONTOLOGOS.length} odontólogos, ${ODONTOLOGOS.length + 2} usuarios`);

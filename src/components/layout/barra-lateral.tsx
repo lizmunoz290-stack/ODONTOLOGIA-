@@ -19,6 +19,11 @@ export function BarraLateral({
   const [abierto, setAbierto] = useState(false);
   useEffect(() => setAbierto(false), [ruta]);
 
+  // El elemento activo es el de ruta más larga que coincide (así /finanzas no se marca en /finanzas/gastos)
+  const activoHref = MENU.flatMap((g) => g.items.map((i) => i.href))
+    .filter((h) => ruta === h || ruta.startsWith(h + "/"))
+    .sort((a, b) => b.length - a.length)[0];
+
   const navegacion = (
     <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
       {MENU.map((g) => {
@@ -28,7 +33,7 @@ export function BarraLateral({
           <div key={g.grupo}>
             <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-marca-200/70">{g.grupo}</p>
             {items.map((i) => {
-              const activo = ruta === i.href || ruta.startsWith(i.href + "/");
+              const activo = i.href === activoHref;
               return (
                 <Link
                   key={i.href}
@@ -51,7 +56,9 @@ export function BarraLateral({
 
   const pie = (
     <div className="border-t border-white/10 p-3">
-      <p className="truncate text-sm font-medium text-white">{usuario.nombre}</p>
+      <Link href="/perfil" className="block truncate text-sm font-medium text-white hover:underline">
+        {usuario.nombre}
+      </Link>
       <p className="text-xs text-marca-200">{ROLES[usuario.rol]}</p>
       <form action={cerrarSesion} className="mt-2">
         <button type="submit" className="w-full rounded-lg bg-white/10 px-3 py-1.5 text-left text-sm text-marca-50 hover:bg-white/20">

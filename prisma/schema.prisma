@@ -94,6 +94,10 @@ model Configuracion {
   metodoProrrateo MetodoProrrateo @default(MINUTOS)
   igvPorcentaje   Float           @default(0.18)
   margenMinimo    Float           @default(0.20)
+  /// Reparto de gastos compartidos e indirectos entre especialidades (libro contable)
+  repartoMetodo   RepartoMetodo   @default(INGRESOS)
+  /// Porcentaje para Ortodoncia cuando el reparto es FIJO (0 a 1)
+  repartoOrtodoncia Float         @default(0.5)
   updatedAt       DateTime        @updatedAt
 }
 
@@ -244,4 +248,116 @@ model Atencion {
   @@index([fecha])
   @@index([servicioId])
   @@index([odontologoId])
+}
+
+// ───────────────────────── Libro contable (ingresos y gastos reales) ─────────────────────────
+
+enum Especialidad {
+  ORTODONCIA
+  ODONTOLOGIA
+}
+
+enum DestinoGasto {
+  DIRECTO_ORTODONCIA
+  DIRECTO_ODONTOLOGIA
+  DIRECTO_COMPARTIDO
+  INDIRECTO
+  NO_OPERATIVO
+}
+
+enum RepartoMetodo {
+  INGRESOS
+  MITAD
+  FIJO
+}
+
+enum IndicadorMeta {
+  ORTODONCIA
+  ODONTOLOGIA
+  INICIOS
+  UTILIDAD
+}
+
+/// Cobro registrado en el libro de caja (una fila de la hoja INGRESOS)
+model Ingreso {
+  id           Int          @id @default(autoincrement())
+  fecha        DateTime
+  ticket       Int?
+  paciente     String
+  /// Nombre normalizado (mayúsculas, sin tildes) para enlazar con inicios y contar pacientes
+  pacienteClave String
+  monto        Float
+  medioPago    String
+  especialidad Especialidad
+  /// Otro cobro del libro tiene el mismo número de ticket
+  ticketRepetido Boolean    @default(false)
+  /// Descripción de la corrección automática aplicada al importar (p. ej. año de la fecha)
+  correccion   String?
+  origen       String
+  /// Identificador único de la fila para no duplicar al volver a importar
+  huella       String       @unique
+  createdAt    DateTime     @default(now())
+
+  @@index([fecha])
+  @@index([pacienteClave])
+}
+
+model TipoGasto {
+  id      Int          @id @default(autoincrement())
+  nombre  String       @unique
+  destino DestinoGasto
+  gastos  Gasto[]
+}
+
+/// Egreso registrado en el libro de caja (una fila de la hoja GASTOS)
+model Gasto {
+  id           Int       @id @default(autoincrement())
+  fecha        DateTime
+  descripcion  String
+  monto        Float
+  tipoGastoId  Int
+  tipoGasto    TipoGasto @relation(fields: [tipoGastoId], references: [id])
+  /// Tipo tal como estaba escrito en el Excel
+  tipoOriginal String
+  medioPago    String
+  comprobante  String
+  numero       String?
+  correccion   String?
+  origen       String
+  huella       String    @unique
+  createdAt    DateTime  @default(now())
+
+  @@index([fecha])
+  @@index([tipoGastoId])
+}
+
+/// Paciente nuevo captado (hoja INICIOS)
+model Inicio {
+  id           Int      @id @default(autoincrement())
+  fecha        DateTime
+  paciente     String
+  pacienteClave String
+  asesora      String
+  cantidad     Int      @default(1)
+  origen       String
+  huella       String   @unique
+
+  @@index([fecha])
+  @@index([pacienteClave])
+}
+
+model Meta {
+  id        Int           @id @default(autoincrement())
+  periodo   String /// AAAA-MM
+  indicador IndicadorMeta
+  valor     Float
+
+  @@unique([periodo, indicador])
+}
+
+model Permiso {
+  id          Int       @id @default(autoincrement())
+  detalle     String    @unique
+  vencimiento DateTime?
+  notas       String?
 }

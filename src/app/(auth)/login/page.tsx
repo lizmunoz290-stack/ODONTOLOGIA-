@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { FormularioLogin } from "./formulario-login";
+import { redirect } from "next/navigation";
 import { obtenerConfiguracion } from "@/lib/db";
+import { obtenerSesion } from "@/lib/auth/sesion";
 
 export const metadata: Metadata = { title: "Ingresar" };
 
 export default async function PaginaLogin({ searchParams }: { searchParams: Promise<{ desde?: string }> }) {
   const { desde } = await searchParams;
+  if (await obtenerSesion()) redirect("/dashboard");
   const config = await obtenerConfiguracion();
   return (
     <main className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-marca-50 to-slate-100 p-4">

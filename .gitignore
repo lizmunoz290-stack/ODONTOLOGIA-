@@ -44,3 +44,8 @@ next-env.d.ts
 # base de datos local
 /prisma/*.db
 /prisma/*.db-journal
+
+# datos reales de la clínica (nunca subir al repositorio)
+/datos/
+*.xlsx
+*.xls

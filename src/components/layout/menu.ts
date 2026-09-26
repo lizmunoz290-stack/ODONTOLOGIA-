@@ -16,6 +16,18 @@ export const MENU: { grupo: string; items: ItemMenu[] }[] = [
     ],
   },
   {
+    grupo: "Finanzas (libro contable)",
+    items: [
+      { href: "/finanzas", texto: "Estado de resultados", icono: "💰", permiso: "verCostos" },
+      { href: "/finanzas/ingresos", texto: "Ingresos", icono: "⬆️", permiso: "verCostos" },
+      { href: "/finanzas/gastos", texto: "Gastos", icono: "⬇️", permiso: "verCostos" },
+      { href: "/finanzas/clasificacion", texto: "Clasificación de gastos", icono: "🗂️", permiso: "verCostos" },
+      { href: "/finanzas/metas", texto: "Metas e inicios", icono: "🎯", permiso: "verCostos" },
+      { href: "/finanzas/permisos", texto: "Permisos y licencias", icono: "📋", permiso: "verCostos" },
+      { href: "/finanzas/importar", texto: "Importar libro", icono: "📥", permiso: "editarCatalogo" },
+    ],
+  },
+  {
     grupo: "Operación",
     items: [{ href: "/atenciones", texto: "Atenciones", icono: "🗓️", permiso: "verAtenciones" }],
   },
