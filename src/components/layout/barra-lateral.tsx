@@ -19,6 +19,11 @@ export function BarraLateral({
   const [abierto, setAbierto] = useState(false);
   useEffect(() => setAbierto(false), [ruta]);
 
+  // El elemento activo es el de ruta más larga que coincide (así /finanzas no se marca en /finanzas/gastos)
+  const activoHref = MENU.flatMap((g) => g.items.map((i) => i.href))
+    .filter((h) => ruta === h || ruta.startsWith(h + "/"))
+    .sort((a, b) => b.length - a.length)[0];
+
   const navegacion = (
     <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
       {MENU.map((g) => {
@@ -28,7 +33,7 @@ export function BarraLateral({
           <div key={g.grupo}>
             <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-marca-200/70">{g.grupo}</p>
             {items.map((i) => {
-              const activo = ruta === i.href || ruta.startsWith(i.href + "/");
+              const activo = i.href === activoHref;
               return (
                 <Link
                   key={i.href}

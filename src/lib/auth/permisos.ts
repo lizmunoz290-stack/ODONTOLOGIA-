@@ -41,6 +41,7 @@ export const RUTAS_PROTEGIDAS: [string, Permiso][] = [
   ["/reportes", "verReportes"],
   ["/api/reportes", "verReportes"],
   ["/api/atenciones", "registrarAtenciones"],
+  ["/finanzas", "verCostos"],
   ["/usuarios", "gestionarUsuarios"],
   ["/configuracion", "configurar"],
 ];

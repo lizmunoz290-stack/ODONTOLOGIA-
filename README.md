@@ -39,6 +39,7 @@ Todo se ve en pantalla y se puede **descargar en Excel**. La interfaz está en e
 | **Importación desde Excel** | Plantilla descargable con listas desplegables. Primero se valida (con errores por número de fila) y luego se importan las filas válidas. |
 | **Dashboard** | Filtros por fechas, odontólogo, categoría y turno. KPIs, alertas de margen, evolución mensual, ingresos por categoría, rankings, rentabilidad por servicio, punto de equilibrio y productividad por odontólogo y turno. |
 | **Reportes** | 8 reportes en pantalla con botón **Descargar Excel** (ver [Reportes Excel](#reportes-excel)). |
+| **Finanzas (libro contable)** | Importa el Excel de ingresos y gastos reales de la clínica (formato *ODM - INFORME*), corrige fechas y tipos de gasto, y muestra el **estado de resultados por especialidad** (Ortodoncia y Odontología), metas contra avance, inicios por asesora con su conversión y permisos por vencer. |
 | **Usuarios y roles** | Administrador, Caja/Secretaría y Odontólogo, cada uno con sus permisos. |
 
 La aplicación es **responsive**: funciona en celular (menú desplegable, tablas con desplazamiento horizontal).
@@ -122,6 +123,39 @@ Orden recomendado para configurar una clínica real:
 5. **Costos indirectos**: registre los gastos fijos de cada mes (o use *Copiar gastos del mes anterior*) y elija el método de prorrateo.
 6. **Atenciones**: regístrelas día a día o impórtelas desde Excel (*Atenciones → Importar desde Excel → Descargar plantilla*).
 7. **Dashboard** y **Reportes**: analice los resultados y descargue los Excel.
+
+## Finanzas: libro contable
+
+En el menú **Finanzas → Importar libro**, suba el Excel con las hojas `INGRESOS AAAA`, `GASTOS AAAA`, `INICIOS AAAA`, `REPORTE MENSUAL` (metas) y `PERMISOS`. Primero pulse **Revisar archivo** para ver qué se leyó y qué se corrigió, y luego **Importar**. Puede subir el mismo archivo cada mes: cada fila tiene una huella y solo se agregan las nuevas.
+
+**Correcciones automáticas al importar:**
+
+- Se omiten los tickets **ANULADO** y las filas sin monto.
+- Se ignoran los títulos y encabezados repetidos dentro de una hoja.
+- Se corrigen los **años mal escritos**, por ejemplo 26/12/**2025** dentro de la hoja 2024, comparando cada fecha con la fila anterior.
+- Las fechas escritas como texto ("22-07") se convierten, y las filas sin fecha toman la de la fila anterior.
+- Se unifican los tipos de gasto escritos de distinta forma (RYDENT/RAYDENT…).
+- El tipo **OTROS** se reparte según la descripción: alquiler, luz, agua, Entel, SUNAT, publicidad, sueldos, retiros de utilidad, préstamos…
+- Se marcan los **tickets repetidos** para revisarlos en *Finanzas → Ingresos*.
+
+**Clasificación de gastos** (*Finanzas → Clasificación de gastos*). Cada tipo de gasto va a una de estas clasificaciones:
+
+| Clasificación | Ejemplos | Cómo se usa |
+|---|---|---|
+| Costo directo · Ortodoncia | Ortodoncista, laboratorio de ortodoncia, comisiones de ortodoncia | Solo a Ortodoncia |
+| Costo directo · Odontología | Odontólogo, cirujano, implantólogo, endodoncista | Solo a Odontología |
+| Costo directo compartido | Materiales, Raydent, laboratorio sin especialidad | Se reparte entre las dos |
+| Gasto indirecto (fijo) | Sueldos, alquiler, luz, teléfono, publicidad, impuestos | Se reparte entre las dos |
+| No operativo | Retiros de utilidad, préstamos, letras | No resta a la utilidad operativa; sí al flujo neto |
+
+El reparto de lo compartido y lo fijo se hace **según los ingresos de cada especialidad** en cada mes. También se puede elegir 50/50 o un porcentaje fijo.
+
+```
+Utilidad operativa = Ingresos − (directos + compartidos + gastos fijos)
+Flujo neto de caja = Utilidad operativa − gastos no operativos
+```
+
+> **Privacidad:** el libro contable contiene nombres y DNI de pacientes. Se guarda solo en la base de datos de la clínica. No lo suba al repositorio de código.
 
 ## Cómo se calculan los costos
 

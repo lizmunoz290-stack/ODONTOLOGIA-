@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { requerirSesion } from "@/lib/auth/sesion";
 import { puede } from "@/lib/auth/permisos";
 import { prisma } from "@/lib/db";
+import { estadoPermiso } from "@/lib/libro/permisos";
 import { leerFiltros, type ParamsBusqueda } from "@/lib/filtros";
 import { datosDashboard, type FilaServicio } from "@/lib/dashboard";
 import { NOMBRE_METODO } from "@/lib/costeo";
@@ -53,10 +54,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const filtros = leerFiltros(sp, "mes");
   if (esOdontologo) filtros.odontologoId = sesion.odontologoId ?? -1;
 
-  const [d, odontologos] = await Promise.all([
+  const [d, odontologos, permisos] = await Promise.all([
     datosDashboard(filtros),
     prisma.odontologo.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: "asc" } }),
+    verCostos ? prisma.permiso.findMany() : Promise.resolve([]),
   ]);
+  const avisosPermisos = permisos
+    .map((p) => ({ ...p, ...estadoPermiso(p.vencimiento) }))
+    .filter((p) => p.estado === "VENCIDO" || p.estado === "POR_VENCER");
   const { total } = d;
   const orden = typeof sp.orden === "string" && sp.orden in ORDENES ? (sp.orden as keyof typeof ORDENES) : "utilidad";
   const tabla = [...d.servicios].sort(ORDENES[orden]);
@@ -130,6 +135,15 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           </>
         )}
       </div>
+
+      {avisosPermisos.length > 0 && (
+        <Link href="/finanzas/permisos" className="mt-5 block rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 hover:bg-red-100" role="status">
+          <b>📋 Permisos: </b>
+          {avisosPermisos
+            .map((p) => (p.estado === "VENCIDO" ? `${p.detalle} (vencido hace ${-p.dias!} días)` : `${p.detalle} (vence en ${p.dias} días)`))
+            .join(" · ")}
+        </Link>
+      )}
 
       {/* Alertas */}
       {verCostos && d.alertas.length > 0 && (

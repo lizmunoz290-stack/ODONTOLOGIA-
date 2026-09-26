@@ -27,6 +27,8 @@ import {
 import { nombrePeriodo, redondear } from "../formato";
 import type { Filtros } from "../filtros";
 import { columnas, dividir, formulaDividir, type Hoja, type Reporte } from "./tipos";
+import { datosFinanzas } from "../libro/datos";
+import { NOMBRE_DESTINO } from "../libro/normalizar";
 
 export type TipoReporte =
   | "mas-vendidos"
@@ -36,6 +38,7 @@ export type TipoReporte =
   | "indirectos"
   | "odontologos"
   | "ventas"
+  | "estado-resultados"
   | "consolidado";
 
 export interface InfoReporte {
@@ -55,6 +58,7 @@ export const REPORTES: InfoReporte[] = [
   { tipo: "indirectos", titulo: "Costos indirectos y prorrateo", descripcion: "Gastos fijos mensuales y su reparto entre los servicios.", archivo: "Costos_indirectos", soloCostos: true },
   { tipo: "odontologos", titulo: "Rentabilidad por odontólogo", descripcion: "Atenciones, horas, ingresos y (para el administrador) utilidad por profesional.", archivo: "Rentabilidad_odontologo", soloCostos: false },
   { tipo: "ventas", titulo: "Ventas detalladas", descripcion: "Todas las atenciones del periodo con precios, pagos y canal.", archivo: "Ventas_detalladas", soloCostos: false },
+  { tipo: "estado-resultados", titulo: "Estado de resultados (libro contable)", descripcion: "Ingresos y gastos reales por mes y por especialidad, y gastos por tipo.", archivo: "Estado_de_resultados", soloCostos: true },
   { tipo: "consolidado", titulo: "Reporte consolidado", descripcion: "Un solo archivo con todas las hojas anteriores.", archivo: "Consolidado", soloCostos: false },
 ];
 
@@ -457,6 +461,81 @@ async function ventas(ctx: Contexto): Promise<Hoja[]> {
   return [{ nombre: "Ventas detalladas", titulo: "Ventas detalladas por fecha", tabla: { totales: true, filas, columnas: cols } }];
 }
 
+// ───────────────────────── 8. Estado de resultados (libro contable) ─────────────────────────
+
+async function estadoResultados(ctx: Contexto): Promise<Hoja[]> {
+  const d = await datosFinanzas({ desde: ctx.filtros.desde.slice(0, 7), hasta: ctx.filtros.hasta.slice(0, 7) });
+  type M = (typeof d.meses)[number];
+  const margen = { tipo: "formula" as const, excel: (r: (c: string) => string) => formulaDividir(r("utilidad"), r("ingresos")), valor: (t: Record<string, number>) => dividir(t.utilidad, t.ingresos) };
+  const esp = (["ORTODONCIA", "ODONTOLOGIA"] as const).map((k) => ({ nombre: k === "ORTODONCIA" ? "Ortodoncia" : "Odontología", ...d.total[k] }));
+  type E = (typeof esp)[number];
+  type T = (typeof d.tipos)[number];
+  const ingTotal = d.total.total.ingresos;
+  const notaReparto = `Compartidos y gastos fijos repartidos ${d.reparto.metodo === "INGRESOS" ? "según los ingresos de cada especialidad" : d.reparto.metodo === "MITAD" ? "50 % / 50 %" : `con ${Math.round(d.reparto.porcentajeOrtodoncia * 100)} % para Ortodoncia`}.`;
+  return [
+    {
+      nombre: "Estado de resultados",
+      titulo: "Estado de resultados mensual (libro contable)",
+      notas: ["Gastos operativos = directos + compartidos + fijos. No operativo = retiros de utilidad, préstamos y letras (no restan a la utilidad operativa).", notaReparto],
+      tabla: {
+        totales: true,
+        filas: d.meses,
+        columnas: columnas<M>([
+          { clave: "mes", titulo: "Mes", tipo: "texto", valor: (m) => nombrePeriodo(m.periodo), total: { tipo: "texto", texto: "TOTAL" } },
+          { clave: "orto", titulo: "Ingresos Ortodoncia", tipo: "soles", valor: (m) => m.ORTODONCIA.ingresos, total: { tipo: "suma" } },
+          { clave: "odo", titulo: "Ingresos Odontología", tipo: "soles", valor: (m) => m.ODONTOLOGIA.ingresos, total: { tipo: "suma" } },
+          { clave: "ingresos", titulo: "Ingresos totales", tipo: "soles", valor: (m) => m.total.ingresos, total: { tipo: "suma" } },
+          { clave: "dorto", titulo: "Directo Ortodoncia", tipo: "soles", valor: (m) => m.ORTODONCIA.directo, total: { tipo: "suma" } },
+          { clave: "dodo", titulo: "Directo Odontología", tipo: "soles", valor: (m) => m.ODONTOLOGIA.directo, total: { tipo: "suma" } },
+          { clave: "comp", titulo: "Directo compartido", tipo: "soles", valor: (m) => m.total.compartido, total: { tipo: "suma" } },
+          { clave: "ind", titulo: "Gastos fijos", tipo: "soles", valor: (m) => m.total.indirecto, total: { tipo: "suma" } },
+          { clave: "costo", titulo: "Gastos operativos", tipo: "soles", valor: (m) => m.total.costoTotal, total: { tipo: "suma" } },
+          { clave: "utilidad", titulo: "Utilidad operativa", tipo: "soles", valor: (m) => m.total.utilidad, total: { tipo: "suma" } },
+          { clave: "margen", titulo: "Margen %", tipo: "porcentaje", valor: (m) => m.total.margen, total: margen },
+          { clave: "noop", titulo: "No operativo", tipo: "soles", valor: (m) => m.noOperativo, total: { tipo: "suma" } },
+          { clave: "flujo", titulo: "Flujo neto", tipo: "soles", valor: (m) => m.flujoNeto, total: { tipo: "suma" } },
+          { clave: "inicios", titulo: "Inicios", tipo: "entero", valor: (m) => d.inicios.get(m.periodo) ?? 0, total: { tipo: "suma" } },
+        ]),
+      },
+    },
+    {
+      nombre: "Por especialidad",
+      titulo: "Rentabilidad por especialidad",
+      notas: [notaReparto],
+      tabla: {
+        totales: true,
+        filas: esp,
+        columnas: columnas<E>([
+          { clave: "nombre", titulo: "Especialidad", tipo: "texto", valor: (e) => e.nombre, total: { tipo: "texto", texto: "TOTAL" } },
+          { clave: "ingresos", titulo: "Ingresos", tipo: "soles", valor: (e) => e.ingresos, total: { tipo: "suma" } },
+          { clave: "directo", titulo: "Costo directo propio", tipo: "soles", valor: (e) => e.directo, total: { tipo: "suma" } },
+          { clave: "compartido", titulo: "Compartido asignado", tipo: "soles", valor: (e) => e.compartido, total: { tipo: "suma" } },
+          { clave: "indirecto", titulo: "Gastos fijos asignados", tipo: "soles", valor: (e) => e.indirecto, total: { tipo: "suma" } },
+          { clave: "costo", titulo: "Costo total", tipo: "soles", valor: (e) => e.costoTotal, total: { tipo: "suma" } },
+          { clave: "utilidad", titulo: "Utilidad operativa", tipo: "soles", valor: (e) => e.utilidad, total: { tipo: "suma" } },
+          { clave: "margen", titulo: "Margen %", tipo: "porcentaje", valor: (e) => e.margen, total: margen },
+        ]),
+      },
+    },
+    {
+      nombre: "Gastos por tipo",
+      titulo: "Gastos por tipo y clasificación",
+      tabla: {
+        totales: true,
+        filas: d.tipos,
+        columnas: columnas<T>([
+          { clave: "tipo", titulo: "Tipo de gasto", tipo: "texto", valor: (t) => t.nombre, total: { tipo: "texto", texto: "TOTAL" } },
+          { clave: "destino", titulo: "Clasificación", tipo: "texto", valor: (t) => NOMBRE_DESTINO[t.destino] },
+          { clave: "n", titulo: "Movimientos", tipo: "entero", valor: (t) => t.cantidad, total: { tipo: "suma" } },
+          { clave: "monto", titulo: "Monto", tipo: "soles", valor: (t) => t.monto, total: { tipo: "suma" } },
+          { clave: "pct", titulo: "% de los ingresos", tipo: "porcentaje", valor: (t) => dividir(t.monto, ingTotal), total: { tipo: "suma" } },
+          { clave: "ant", titulo: "Periodo anterior", tipo: "soles", valor: (t) => t.anterior, total: { tipo: "suma" } },
+        ]),
+      },
+    },
+  ];
+}
+
 // ───────────────────────── Registro ─────────────────────────
 
 const CONSTRUCTORES: Record<Exclude<TipoReporte, "consolidado">, (ctx: Contexto) => Promise<Hoja[]>> = {
@@ -467,6 +546,7 @@ const CONSTRUCTORES: Record<Exclude<TipoReporte, "consolidado">, (ctx: Contexto)
   indirectos,
   odontologos,
   ventas,
+  "estado-resultados": estadoResultados,
 };
 
 /** Construye un reporte. `verCostos` define qué reportes/columnas se incluyen. */
