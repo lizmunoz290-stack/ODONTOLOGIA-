@@ -24,3 +24,14 @@ export function nombreArchivo(tipo: string, periodo: string): string {
     s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9-]+/g, "_").replace(/^_+|_+$/g, "");
   return `Reporte_${limpiar(tipo)}_${limpiar(periodo)}.xlsx`;
 }
+
+/**
+ * Periodo para el nombre del archivo: "2026-09" si el rango es un mes calendario completo
+ * (o el mes en curso hasta hoy); si no, "2026-04-01_a_2026-09-26".
+ */
+export function periodoArchivo(desde: string, hasta: string, hoy: string): string {
+  const [a, m] = desde.split("-").map(Number);
+  const ultimoDia = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10);
+  const mesCompleto = desde.endsWith("-01") && (hasta === ultimoDia || (hasta === hoy && hoy.slice(0, 7) === desde.slice(0, 7)));
+  return mesCompleto ? desde.slice(0, 7) : `${desde}_a_${hasta}`;
+}
