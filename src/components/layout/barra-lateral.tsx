@@ -51,7 +51,9 @@ export function BarraLateral({
 
   const pie = (
     <div className="border-t border-white/10 p-3">
-      <p className="truncate text-sm font-medium text-white">{usuario.nombre}</p>
+      <Link href="/perfil" className="block truncate text-sm font-medium text-white hover:underline">
+        {usuario.nombre}
+      </Link>
       <p className="text-xs text-marca-200">{ROLES[usuario.rol]}</p>
       <form action={cerrarSesion} className="mt-2">
         <button type="submit" className="w-full rounded-lg bg-white/10 px-3 py-1.5 text-left text-sm text-marca-50 hover:bg-white/20">
